@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>SSAT Upper Level Full Simulator</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+:root{
+  --bg:#f2f4f7; --card:#ffffff; --text:#111; --accent:#2563eb; --correct:#22c55e; --wrong:#ef4444;
+}
+.dark{
+  --bg:#0f172a; --card:#020617; --text:#e5e7eb; --accent:#38bdf8; --correct:#22c55e; --wrong:#f87171;
+}
+body{
+  margin:0; font-family:system-ui, -apple-system, Segoe UI, Roboto, Arial;
+  background:var(--bg); color:var(--text);
+}
+.container{max-width:960px;margin:auto;padding:16px;}
+.card{background:var(--card);border-radius:14px;padding:18px;box-shadow:0 8px 24px rgba(0,0,0,.08);}
+button{width:100%;padding:14px;margin:6px 0;border:none;border-radius:10px;font-size:16px;cursor:pointer;background:#e5e7eb}
+button.primary{background:var(--accent);color:white}
+.choice{background:#e5e7eb}
+.choice:hover{filter:brightness(.95)}
+.correct{background:var(--correct)!important;color:white}
+.wrong{background:var(--wrong)!important;color:white}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.hidden{display:none}
+.header{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+#timer{font-weight:700}
+.progress{height:8px;background:#cbd5e1;border-radius:999px;overflow:hidden;margin:8px 0}
+.progress>div{height:100%;background:var(--accent)}
+@media(max-width:640px){.row{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="container">
+<div class="card">
+<div class="header">
+<h2>🎓 SSAT Upper Level – Practice Questions</h2>
+<button onclick="toggleDark()">🌙 / ☀️</button>
+</div>
+
+<div id="menu">
+  <h3>Select Mode</h3>
+  <button class="primary" onclick="setMode('test')">🧪 Full-Length Test</button>
+  <button onclick="setMode('practice')">Practice Mode</button>
+</div>
+
+<div id="sectionSelect" class="hidden">
+  <h3>Select Section</h3>
+  <div class="row">
+    <button onclick="startSection('math')">🧮 Quantitative</button>
+    <button onclick="startSection('verbal')">🧠 Verbal</button>
+    <button onclick="startSection('reading')">📖 Reading</button>
+    <button onclick="startSection('writing')">✍️ Writing</button>
+  </div>
+</div>
+
+<div id="game" class="hidden">
+  <div class="header">
+    <div id="timer"></div>
+    <div id="counter"></div>
+  </div>
+  <div class="progress"><div id="bar"></div></div>
+  <h3 id="question"></h3>
+  <div id="choices"></div>
+  <p id="feedback"></p>
+  <button onclick="nextQ()">Next</button>
+</div>
+
+<div id="writing" class="hidden">
+  <h3>Writing Sample</h3>
+  <p id="prompt"></p>
+  <textarea id="essay" rows="10" style="width:100%;border-radius:10px"></textarea>
+  <button onclick="finishWriting()">Submit</button>
+</div>
+
+<div id="results" class="hidden">
+  <h3>📊 Results</h3>
+  <p id="summary"></p>
+  <button onclick="location.reload()">Restart</button>
+</div>
+</div>
+</div>
+
+<script>
+let mode=''; let section=''; let qIndex=0; let score=0; let timerInt; let timeLeft=0;
+const limits={math:720,verbal:300,reading:300,writing:1500};
+
+const bank={
+math:[
+{q:'35% of a number is 7. What is 80% of the number?',c:['6','13','16','19','48'],a:3},
+{q:'Mean of 85, 90, 95, and x is 92. x equals:',c:['90','92','94','96','98'],a:3},
+{q:'If 3x+5=20, x equals:',c:['3','4','5','6','7'],a:1},
+{q:'A rectangle has area 72 and length 12. Width?',c:['4','5','6','8','9'],a:2},
+{q:'If the perimeter of a square is 40, its area is:',c:['25','50','100','160','400'],a:2},
+{q:'What is the value of 2^5 × 2^3?',c:['64','128','256','512','1024'],a:2},
+{q:'A car travels 180 miles in 3 hours. Average speed?',c:['40 mph','50 mph','60 mph','70 mph','90 mph'],a:2},
+{q:'The ratio 3:5 is equivalent to:',c:['6:10','9:20','10:12','12:20','15:18'],a:0},
+{q:'If x/4 = 6, x equals:',c:['18','20','22','24','28'],a:3},
+{q:'The median of 2, 5, 7, 10, 16 is:',c:['5','6','7','8','10'],a:2}
+],
+verbal:[
+{q:'DESPONDENT most nearly means:',c:['pleasant','hopeless','rhythmic','assuring','responsive'],a:1},
+{q:'BANAL most nearly means:',c:['original','trite','rare','powerful','sincere'],a:1},
+{q:'LAX most nearly means:',c:['strict','relaxed','angry','harsh','careful'],a:1},
+{q:'Coach is to team as conductor is to:',c:['students','patients','orchestra','choir','audience'],a:2},
+{q:'ABATE most nearly means:',c:['increase','lessen','delay','announce','permit'],a:1},
+{q:'CANDID most nearly means:',c:['secretive','honest','careless','rude','timid'],a:1},
+{q:'OMINOUS most nearly means:',c:['hopeful','threatening','harmless','cheerful','minor'],a:1},
+{q:'FRUGAL most nearly means:',c:['wasteful','thrifty','careless','lavish','indifferent'],a:1},
+{q:'BRIEF is to SHORT as LATE is to:',c:['early','slow','prompt','delayed','final'],a:0},
+{q:'SKEPTICAL most nearly means:',c:['believing','doubtful','curious','angry','fearful'],a:1}
+],
+reading:[
+{q:'Primary purpose of the diving bell spider passage is to:',c:['argue conservation','compare spiders','describe respiration','introduce an unusual species','criticize research'],a:3},
+{q:'Hydrophobic most nearly means:',c:['water-repellent','water-absorbing','fragile','smooth','transparent'],a:0},
+{q:'Which detail best supports the spider’s adaptation?',c:['It hunts at night','It builds silk','It traps air bubbles','It eats insects','It lives alone'],a:2},
+{q:'The tone of the passage is best described as:',c:['persuasive','scientific','humorous','critical','dramatic'],a:1},
+{q:'The author includes scientific terms mainly to:',c:['confuse readers','add authority','criticize research','increase length','persuade emotionally'],a:1}
+],
+writing:[
+'What three traits are most important in a teacher? Use examples.',
+'Describe a challenge you overcame and what you learned.',
+'Do schools place too much emphasis on grades? Explain.',
+'Describe a person who has influenced you and why.'
+]
+};
+
+function toggleDark(){document.body.classList.toggle('dark')}
+function setMode(m){mode=m;hide('menu');show('sectionSelect')}
+function startSection(s){section=s; qIndex=0; hide('sectionSelect');
+  if(s==='writing'){show('writing'); document.getElementById('prompt').innerText=bank.writing[Math.floor(Math.random()*bank.writing.length)]; if(mode==='test') startTimer(limits.writing); return;}
+  show('game'); loadQ(); if(mode==='test') startTimer(limits[s]); else document.getElementById('timer').innerText='Practice Mode';}
+function loadQ(){const q=bank[section][qIndex]; document.getElementById('question').innerText=q.q; document.getElementById('choices').innerHTML=''; document.getElementById('counter').innerText=`Question ${qIndex+1} / ${bank[section].length}`; document.getElementById('bar').style.width=((qIndex+1)/bank[section].length*100)+'%'; q.c.forEach((ch,i)=>{const b=document.createElement('button'); b.className='choice'; b.innerText=ch; b.onclick=()=>answer(b,i); document.getElementById('choices').appendChild(b)});}
+function answer(btn,i){const q=bank[section][qIndex]; if(mode==='practice'){ if(i===q.a){btn.classList.add('correct'); score+=10; document.getElementById('feedback').innerText='Correct';} else {btn.classList.add('wrong'); document.getElementById('feedback').innerText='Incorrect';}} else { if(i===q.a) score+=10; }}
+function nextQ(){qIndex++; if(qIndex<bank[section].length){loadQ()} else endSection()}
+function startTimer(sec){timeLeft=sec; tick(); timerInt=setInterval(()=>{timeLeft--; tick(); if(timeLeft<=0) endSection()},1000)}
+function tick(){const m=Math.floor(timeLeft/60), s=timeLeft%60; document.getElementById('timer').innerText=`⏱ ${m}:${String(s).padStart(2,'0')}`}
+function endSection(){clearInterval(timerInt); hide('game'); hide('writing'); show('results'); document.getElementById('summary').innerText=`Section complete. Score: ${score}`}
+function finishWriting(){endSection()}
+function show(id){document.getElementById(id).classList.remove('hidden')}
+function hide(id){document.getElementById(id).classList.add('hidden')}
+</script>
+</body>
+</html>
